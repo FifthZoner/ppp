@@ -10,13 +10,21 @@
 
 namespace ppp::internal {
 
-    message message::create_startup_message(std::string&& user_name) {
+    message message::create_startup_message(std::string&& user_name, std::string&& database) {
         message msg{};
+        std::cout << "MESSAGE: creating startup message\n";
         msg.type = startup_message;
         msg.data.pop_back();
+        std::cout << "    INFO: protocol version: 3.0\n";
         msg.add(0x00030000);
+        std::cout << "    INFO: user: " << user_name << "\n";
         msg.add("user");
         msg.add(std::move(user_name));
+        if (not database.empty()) {
+            std::cout << "    INFO: database: " << database << "\n";
+            msg.add("database");
+            msg.add(std::move(database));
+        }
         msg.add('\0');
         msg.finalize();
         return msg;
@@ -24,9 +32,11 @@ namespace ppp::internal {
 
     message message::create_sasl_initial_response(std::string&& auth_method, std::vector<uint8_t>&& initial_response) {
         message msg{};
+        std::cout << "MESSAGE: creating SASL/other initial response message\n";
         msg.type = sasl_initial_response;
 
         // String - name of auth mechanism
+        std::cout << "    INFO: method: " << auth_method << "\n";
         msg.add(std::move(auth_method));
 
         // int32 - length of response, -1 if none
@@ -37,8 +47,10 @@ namespace ppp::internal {
         msg.add(response_length);
 
         // byte[n] - initial response
-        if (response_length != -1)
+        if (response_length != -1) {
+            std::cout << "    INFO: response content: " << reinterpret_cast<const char*>(initial_response.data()) << "\n";
             msg.add(initial_response.data(), response_length);
+        }
 
         msg.finalize();
         return msg;
@@ -46,85 +58,245 @@ namespace ppp::internal {
 
     message message::create_sasl_response(std::vector<uint8_t>&& response) {
         message msg{};
+        std::cout << "MESSAGE: creating SASL response message\n";
         msg.type = sasl_response;
 
+        std::cout << "    INFO: response content: " << reinterpret_cast<const char*>(response.data()) << "\n";
         msg.add(response.data(), response.size());
 
         msg.finalize();
         return msg;
     }
 
-    void parse_authentication_message(message& msg) {
-        const uint8_t* ptr = msg.data.data() + 1;
-        if (msg.data.size() < 9) {
-            std::cout << "Invalid auth message length: " << msg.data.size() << "\n";
-            return;
+    message message::create_query_message(std::string&& text) {
+        message msg{};
+        std::cout << "MESSAGE: creating query message\n";
+        msg.type = query;
+        std::cout << "    INFO: query content: " << text << "\n";
+        msg.add(std::move(text));
+        msg.finalize();
+        return msg;
+    }
+
+    message message::create_terminate_message() {
+        message msg{};
+        std::cout << "MESSAGE: creating termination message\n";
+        msg.type = terminate;
+        msg.finalize();
+        return msg;
+    }
+
+    message parse_authentication_message(const std::vector<uint8_t>& buffer, uint32_t& offset) {
+        message msg{};
+        std::cout << "MESSAGE: authentication request\n";
+
+        const uint8_t* ptr = buffer.data() + 1 + offset;
+        if (buffer.size() - offset < 9) {
+            std::cout << "ERROR: Invalid auth message length: " << buffer.size() << "\n";
+            return msg;
         }
 
         auto len = reverse<uint32_t>(ptr);
 
-        if (len < 8 or len > msg.data.size() - 1) {
-            std::cout << "Invalid provided auth message length: " << len << "\n";
-            return;
+        if (len < 8 or len > buffer.size() - 1 - offset) {
+            std::cout << "ERROR: Invalid provided auth message length: " << len << "\n";
+            return msg;
         }
+
+        offset += len + 1;
+        msg.data.resize(len + 1);
+        memcpy(msg.data.data(), ptr - 1, len + 1);
 
         auto type = reverse<uint32_t>(ptr += 4);
 
         switch (type) {
         case 0:
             msg.type = authentication_ok;
-            return;
+            std::cout << "    INFO: auth message type: ok\n";
+            return msg;
         case 2:
             msg.type = authentication_kerberos_v5;
-            return;
+            std::cout << "    INFO: auth message type: kerberos v5\n";
+            return msg;
         case 3:
             msg.type = authentication_cleartext_password;
-            return;
+            std::cout << "    INFO: auth message type: cleartext password\n";
+            return msg;
         case 5:
             msg.type = authentication_md5_password;
+            std::cout << "    INFO: md5 password\n";
             break;
         case 7:
             msg.type = authentication_gss;
-            return;
+            std::cout << "    INFO: auth message type: gss\n";
+            return msg;
         case 8:
             msg.type = authentication_gss_continue;
+            std::cout << "    INFO: auth message type: gss continue\n";
             break;
         case 9:
             msg.type = authentication_sspi;
-            return;
+            std::cout << "    INFO: auth message type: sspi\n";
+            return msg;
         case 10:
             msg.type = authentication_sasl;
-            return;
+            std::cout << "    INFO: auth message type: sasl\n";
+            return msg;
         case 11:
             msg.type = authentication_sasl_continue;
-            return;
+            std::cout << "    INFO: auth message type: sasl continue\n";
+            std::cout << "    INFO: challenge value: " << msg.authentication_sasl_continue_get_challenge() << "\n";
+            return msg;
         case 12:
             msg.type = authentication_sasl_final;
-            return;
-        default:
-            std::cout << "Invalid authentication message type integer value: " << type << "\n";
-            return;
-        }
-
-        std::cout << "Unimplemented auth method!\n";
-    }
-
-    message message::create_from_data(std::vector<uint8_t>&& buffer) {
-        message msg{};
-        msg.data = std::move(buffer);
-
-        if (msg.data.empty())
+            std::cout << "    INFO: auth message type: sasl final\n";
+            std::cout << "    INFO: additional info: " << msg.authentication_sasl_final_get_additional_data() << "\n";
             return msg;
-
-        switch (msg.data[0]) {
-        case 'R':
-            parse_authentication_message(msg);
-            break;
         default:
-            break;
+            std::cout << "ERROR: Invalid authentication message type integer value: " << type << "\n";
+            return msg;
         }
+
+        std::cout << "ERROR: Unimplemented auth method!\n";
+        msg.type = unknown;
 
         return msg;
+    }
+
+    message parse_parameter_status_message(const std::vector<uint8_t>& buffer, uint32_t& offset) {
+        message msg{};
+        std::cout << "MESSAGE: parameter status\n";
+
+
+        const uint8_t* ptr = buffer.data() + 1 + offset;
+        if (buffer.size() - offset < 7) {
+            std::cout << "ERROR: Invalid message length: " << buffer.size() << "\n";
+            return msg;
+        }
+
+        auto len = reverse<uint32_t>(ptr);
+
+        if (len < 6 or len > buffer.size() - 1 - offset) {
+            std::cout << "ERROR: Invalid provided message length: " << len << "\n";
+            return msg;
+        }
+
+        offset += len + 1;
+        msg.data.resize(len + 1);
+        memcpy(msg.data.data(), ptr - 1, len + 1);
+
+        ptr += 4;
+        auto name_len = strnlen(reinterpret_cast<const char*>(ptr), len - 4);
+        if (name_len == len - 4) {
+            std::cout << "Cound not find name string null terminator!\n";
+            return msg;
+        }
+        msg._helper = name_len;
+        std::cout << "    INFO: parameter name: " << (char*)ptr << "\n";
+
+        if (*(ptr + name_len) != '\0') {
+            std::cout << "Cound not find value string null terminator!\n";
+            return msg;
+        }
+
+        std::cout << "    INFO: parameter value: " << (char*)(ptr + name_len + 1) << "\n";
+
+        msg.type = parameter_status;
+        return msg;
+    }
+
+    message parse_backend_key_data_message(const std::vector<uint8_t>& buffer, uint32_t& offset) {
+        message msg{};
+        std::cout << "MESSAGE: backend key data\n";
+
+
+        const uint8_t* ptr = buffer.data() + 1 + offset;
+        if (buffer.size() - offset < 13) {
+            std::cout << "ERROR: Invalid message length: " << buffer.size() << "\n";
+            return msg;
+        }
+
+        auto len = reverse<uint32_t>(ptr);
+
+        if (len != 12) {
+            std::cout << "ERROR: Invalid provided message length: " << len << "\n";
+            return msg;
+        }
+
+        offset += len + 1;
+        msg.data.resize(len + 1);
+        memcpy(msg.data.data(), ptr - 1, len + 1);
+
+        std::cout << "    INFO: backend process id: " << reverse<uint32_t>(ptr + 4) << "\n";
+        std::cout << "    INFO: backend secret key: " << reverse<uint32_t>(ptr + 8) << "\n";
+
+        msg.type = parameter_status;
+        return msg;
+    }
+
+    message parse_ready_for_query_message(const std::vector<uint8_t>& buffer, uint32_t& offset) {
+        message msg{};
+        std::cout << "MESSAGE: ready for query\n";
+
+
+        const uint8_t* ptr = buffer.data() + 1 + offset;
+        if (buffer.size() - offset < 6) {
+            std::cout << "ERROR: Invalid message length: " << buffer.size() << "\n";
+            return msg;
+        }
+
+        auto len = reverse<uint32_t>(ptr);
+
+        if (len != 5) {
+            std::cout << "ERROR: Invalid provided message length: " << len << "\n";
+            return msg;
+        }
+
+        offset += len + 1;
+        msg.data.resize(len + 1);
+        memcpy(msg.data.data(), ptr - 1, len + 1);
+
+        std::cout << "    INFO: ready for query status byte: " << *(ptr + 4) << "\n";
+
+        msg.type = ready_for_query;
+        return msg;
+    }
+
+    std::vector<message> message::create_from_data(std::vector<uint8_t>&& buffer) {
+        std::vector<message> messages{};
+
+        if (buffer.empty())
+            return messages;
+
+        uint32_t offset = 0;
+        while (offset < buffer.size()) {
+            message msg{};
+
+            switch (buffer[offset]) {
+            case 'R':
+                msg = parse_authentication_message(buffer, offset);
+                break;
+            case 'S':
+                msg = parse_parameter_status_message(buffer, offset);
+                break;
+            case 'K':
+                msg = parse_backend_key_data_message(buffer, offset);
+                break;
+            case 'Z':
+                msg = parse_ready_for_query_message(buffer, offset);
+                break;
+            default:
+                break;
+            }
+
+            if (msg.type != unknown)
+                messages.emplace_back(std::move(msg));
+            else {
+                std::cout << "ERROR: Unknown message type! Aborting parsing of further messages in the packet!\n";
+                return messages;
+            }
+        }
+        return messages;
     }
 
     uint8_t get_frontend_message_first_byte(message_type type) {
@@ -132,6 +304,10 @@ namespace ppp::internal {
         case sasl_initial_response:
         case sasl_response:
             return 'p';
+        case query:
+            return 'Q';
+        case terminate:
+            return 'X';
         default:
             return '\0';
         }

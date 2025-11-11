@@ -102,11 +102,13 @@ namespace ppp::internal {
             _add(value.c_str(), value.size() + 1);
         }
 
-        static message create_startup_message(std::string&& user_name);
+        static message create_startup_message(std::string&& user_name, std::string&& database = {});
         static message create_sasl_initial_response(std::string&& auth_method, std::vector<uint8_t>&& initial_response);
         static message create_sasl_response(std::vector<uint8_t>&& response);
+        static message create_query_message(std::string&& text);
+        static message create_terminate_message();
 
-        static message create_from_data(std::vector<uint8_t>&& buffer);
+        static std::vector<message> create_from_data(std::vector<uint8_t>&& buffer);
 
         void finalize();
 
