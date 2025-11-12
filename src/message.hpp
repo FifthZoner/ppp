@@ -8,6 +8,8 @@
 #include <cstdint>
 #include <vector>
 #include <asio.hpp>
+
+#include "field_def.hpp"
 #include "utils.tpp"
 
 namespace ppp::internal {
@@ -113,9 +115,10 @@ namespace ppp::internal {
         void finalize();
 
         // getters for data about given message types
-        std::string authentication_sasl_get_method_string() const;
-        std::string authentication_sasl_continue_get_challenge() const;
-        std::string authentication_sasl_final_get_additional_data() const;
+        [[nodiscard]] std::string authentication_sasl_get_method_string() const;
+        [[nodiscard]] std::string authentication_sasl_continue_get_challenge() const;
+        [[nodiscard]] std::string authentication_sasl_final_get_additional_data() const;
+        [[nodiscard]] std::vector<field_def> row_description_get_field_defs() const;
 
     };
 

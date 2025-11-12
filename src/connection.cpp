@@ -158,6 +158,9 @@ namespace ppp {
         std::cout << "CONNECTION: Sent: " << socket->send(asio::buffer(msg.data)) << " bytes of message\n";
 
         auto responses = message::create_from_data(receive_message(*socket));
+        for (auto& n : responses)
+            if (n.type == row_description)
+                auto x = n.row_description_get_field_defs();
     }
 
     connection::connection(connection&& other) noexcept {

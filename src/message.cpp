@@ -321,7 +321,7 @@ namespace ppp::internal {
 
         std::cout << "    INFO: unparsed for now, part of raw data: " << string_from_bytes(ptr + 4, len - 4) << "\n";
 
-        msg.type = row_description;
+        msg.type = data_row;
         return msg;
     }
 
@@ -456,5 +456,66 @@ namespace ppp::internal {
 
     std::string message::authentication_sasl_final_get_additional_data() const {
         return string_from_bytes(data.data() + 9, data.size() - 9);
+    }
+
+    std::vector<field_def> message::row_description_get_field_defs() const {
+        std::cout << "PARSING: Parsing row definition\n";
+
+        auto* ptr = data.data() + 5;
+        // this pointer points to the first byte after the buffer so that overflows can be caught
+        const auto* overflow_ptr = data.data() + data.size();
+
+        auto field_amount = reverse<uint16_t>(ptr);
+        ptr += sizeof(field_amount);
+        std::cout << "    INFO: Amount of fields: " << field_amount << "\n";
+
+        std::vector<field_def> fields{};
+        for (uint16_t n = 0; n < field_amount; n++) {
+            std::cout << "  PARSING: processing field definition: " << n + 1 << "/" << field_amount << "\n";
+            field_def field{};
+            uint16_t max_len = 0;
+
+            auto name_length = strnlen(reinterpret_cast<const char*>(ptr), max_len = overflow_ptr - ptr);
+            if (name_length == max_len) {
+                std::cout << "ERROR: Invalid string termination!\n";
+                return {};
+            }
+
+            field.name = std::unique_ptr<char>((char*)std::malloc((name_length + 1) * sizeof(char)));
+            memcpy(field.name.get(), ptr, name_length + 1);
+            ptr += name_length + 1;
+            std::cout << "    INFO: field name: " << field.name.get() << "\n";
+
+            field.table_oid = reverse<uint32_t>(ptr);
+            ptr += sizeof(field.table_oid);
+            std::cout << "    INFO: field table OID: " << field.table_oid << "\n";
+
+            field.column_attribute = reverse<uint16_t>(ptr);
+            ptr += sizeof(field.column_attribute);
+            std::cout << "    INFO: field column attribute: " << field.column_attribute << "\n";
+
+            field.data_type_oid = reverse<uint32_t>(ptr);
+            ptr += sizeof(field.data_type_oid);
+            std::cout << "    INFO: field data type OID: " << field.data_type_oid << "\n";
+
+            field.data_size = reverse<uint16_t>(ptr);
+            ptr += sizeof(field.data_size);
+            std::cout << "    INFO: field data size: " << field.data_size << "\n";
+
+            field.type_modifier = reverse<uint32_t>(ptr);
+            ptr += sizeof(field.type_modifier);
+            std::cout << "    INFO: field type modifier: " << field.type_modifier << "\n";
+
+            field.format_code = reverse<uint16_t>(ptr);
+            ptr += sizeof(field.format_code);
+            std::cout << "    INFO: field format code: " << field.format_code << "\n";
+        }
+
+        if (ptr > overflow_ptr) {
+            std::cout << "ERROR: Message parsing led to buffer overflow!\n";
+            return {};
+        }
+
+        return std::move(fields);
     }
 }

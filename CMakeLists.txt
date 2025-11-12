@@ -10,7 +10,9 @@ add_library(ppp STATIC
         src/connection.cpp
         src/message.cpp
         src/message.hpp
-        src/utils.tpp)
+        src/utils.tpp
+        src/field_def.cpp
+        src/field_def.hpp)
 
 set_target_properties(ppp PROPERTIES LINKER_LANGUAGE CXX)
 target_link_libraries(ppp gsasl)

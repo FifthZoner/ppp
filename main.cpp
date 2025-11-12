@@ -7,7 +7,7 @@
 #include <iostream>
 
 int main() {
-    ppp::connection conn{asio::ip::address::from_string("10.147.17.126"), 5432, "post", "post", "microviewer"};
+    ppp::connection conn{asio::ip::address::from_string("192.168.0.233"), 5432, "post", "post", "microviewer"};
 
     conn.query("select * from boards;");
 
