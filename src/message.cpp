@@ -256,9 +256,102 @@ namespace ppp::internal {
         msg.data.resize(len + 1);
         memcpy(msg.data.data(), ptr - 1, len + 1);
 
-        std::cout << "    INFO: ready for query status byte: " << *(ptr + 4) << "\n";
+        std::cout << "    INFO: ready for query status byte: " <<  (char)*(ptr + 4) << "\n";
 
         msg.type = ready_for_query;
+        return msg;
+    }
+
+    std::string string_from_bytes(const uint8_t* bytes, std::size_t length) {
+        std::string value{};
+        value.resize(length);
+        memcpy(value.data(), bytes, length);
+        return value;
+    }
+
+    message parse_row_description_message(const std::vector<uint8_t>& buffer, uint32_t& offset) {
+        message msg{};
+        std::cout << "MESSAGE: row description\n";
+
+
+        const uint8_t* ptr = buffer.data() + 1 + offset;
+        if (buffer.size() - offset < 6) {
+            std::cout << "ERROR: Invalid message length: " << buffer.size() << "\n";
+            return msg;
+        }
+
+        auto len = reverse<uint32_t>(ptr);
+
+        if (len > buffer.size() - offset) {
+            std::cout << "ERROR: Invalid provided message length: " << len << "\n";
+            return msg;
+        }
+
+        offset += len + 1;
+        msg.data.resize(len + 1);
+        memcpy(msg.data.data(), ptr - 1, len + 1);
+
+        std::cout << "    INFO: unparsed for now, part of raw data: " << string_from_bytes(ptr + 4, len - 4) << "\n";
+
+        msg.type = row_description;
+        return msg;
+    }
+
+    message parse_data_row_message(const std::vector<uint8_t>& buffer, uint32_t& offset) {
+        message msg{};
+        std::cout << "MESSAGE: data row\n";
+
+
+        const uint8_t* ptr = buffer.data() + 1 + offset;
+        if (buffer.size() - offset < 6) {
+            std::cout << "ERROR: Invalid message length: " << buffer.size() << "\n";
+            return msg;
+        }
+
+        auto len = reverse<uint32_t>(ptr);
+
+        if (len > buffer.size() - offset) {
+            std::cout << "ERROR: Invalid provided message length: " << len << "\n";
+            return msg;
+        }
+
+        offset += len + 1;
+        msg.data.resize(len + 1);
+        memcpy(msg.data.data(), ptr - 1, len + 1);
+
+        std::cout << "    INFO: unparsed for now, part of raw data: " << string_from_bytes(ptr + 4, len - 4) << "\n";
+
+        msg.type = row_description;
+        return msg;
+    }
+
+    message parse_close_message(const std::vector<uint8_t>& buffer, uint32_t& offset) {
+        message msg{};
+        std::cout << "MESSAGE: close\n";
+
+
+        const uint8_t* ptr = buffer.data() + 1 + offset;
+        if (buffer.size() - offset < 6) {
+            std::cout << "ERROR: Invalid message length: " << buffer.size() << "\n";
+            return msg;
+        }
+
+        auto len = reverse<uint32_t>(ptr);
+
+        if (len > buffer.size() - offset) {
+            std::cout << "ERROR: Invalid provided message length: " << len << "\n";
+            return msg;
+        }
+
+        offset += len + 1;
+        msg.data.resize(len + 1);
+        memcpy(msg.data.data(), ptr - 1, len + 1);
+
+        ptr += 4;
+        std::cout << "    INFO: type byte: " << (char)*ptr << "\n";
+        std::cout << "    INFO: name of thing to close: " << (char*)ptr << "\n";
+
+        msg.type = close;
         return msg;
     }
 
@@ -284,6 +377,15 @@ namespace ppp::internal {
                 break;
             case 'Z':
                 msg = parse_ready_for_query_message(buffer, offset);
+                break;
+            case 'T':
+                msg = parse_row_description_message(buffer, offset);
+                break;
+            case 'D':
+                msg = parse_data_row_message(buffer, offset);
+                break;
+            case 'C':
+                msg = parse_close_message(buffer, offset);
                 break;
             default:
                 break;
@@ -342,12 +444,7 @@ namespace ppp::internal {
         // after that there's the data entered earlier so we don't care about that
     }
 
-    std::string string_from_bytes(const uint8_t* bytes, std::size_t length) {
-        std::string value{};
-        value.resize(length);
-        memcpy(value.data(), bytes, length);
-        return value;
-    }
+
 
     std::string message::authentication_sasl_get_method_string() const {
         return string_from_bytes(data.data() + 9, data.size() - 11);

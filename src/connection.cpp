@@ -156,6 +156,8 @@ namespace ppp {
     void connection::query(std::string&& query) {
         auto msg = message::create_query_message(std::move(query));
         std::cout << "CONNECTION: Sent: " << socket->send(asio::buffer(msg.data)) << " bytes of message\n";
+
+        auto responses = message::create_from_data(receive_message(*socket));
     }
 
     connection::connection(connection&& other) noexcept {
