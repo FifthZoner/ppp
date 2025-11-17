@@ -31,6 +31,12 @@ namespace ppp::internal {
         constexpr static bool is_allowed_cpp_type = std::is_convertible_v<I, T>;
 
         template <typename T>
+                constexpr static void throw_if_wrong_type() {
+            if (not is_allowed_cpp_type<T>)
+                throw std::runtime_error("Incompatible type passed to numeric value!");
+        }
+
+        template <typename T>
         _type_integer& operator=(T&& value) {
             _value = I(value);
             return *this;

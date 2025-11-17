@@ -31,10 +31,7 @@ namespace ppp {
             }
             while (len == buffer.size());
 
-            std::cout << "PACKET: Received " << result.size() << " bytes: ";
-            for (unsigned char n : result)
-                std::cout << std::hex << static_cast<unsigned>(n) << " ";
-            std::cout << std::dec << "\n";
+            std::cout << "PACKET: Received " << result.size() << " bytes";
         }
         catch (const std::system_error& e) {
             std::cout << "ERROR: Error while receiving the response: " << e.what() << "\n";
@@ -173,7 +170,7 @@ namespace ppp {
                         f.field_type = current._type = enum_postgresql_type_integer_4;
 
 
-                        this->db_types.emplace(current._name, current);
+                        this->db_types.emplace(current._oid, current);
                     }
                     else if (std::string(f.name.get()) == "typname") {
                         type_definition current{};
@@ -182,11 +179,25 @@ namespace ppp {
                         current._oid = f.data_type_oid;
                         f.field_type = current._type = enum_postgresql_type_varchar_n;
 
-                        this->db_types.emplace(current._name, current);
+                        this->db_types.emplace(current._oid, current);
                     }
                 }
                 auto type_table = table(std::move(fields), std::move(responses));
 
+                for (auto& x : type_table.rows) {
+                    auto name = x[type_table, "typname"].operator()<std::string>();
+                    auto oid = x[type_table, "oid"].operator()<uint32_t>();
+                    if (not this->db_types.contains(oid)) {
+                        type_definition current{};
+
+                        current._type = get_type_enum_by_name(name);
+                        current._name = std::move(name);
+                        x[type_table, "oid"](current._oid);
+
+
+                        this->db_types.emplace(oid, current);
+                    }
+                }
 
                 break;
             }
@@ -200,8 +211,16 @@ namespace ppp {
 
         auto responses = message::create_from_data(receive_message(*socket));
         for (auto& n : responses)
-            if (n.type == row_description)
+            if (n.type == row_description) {
                 auto x = n.row_description_get_field_defs();
+                for (auto& y : x)
+                    y.field_type = db_types[y.data_type_oid]._type;
+                auto tab = table(std::move(x), std::move(responses));
+                break;
+            }
+
+
+
     }
 
     connection::connection(connection&& other) noexcept {

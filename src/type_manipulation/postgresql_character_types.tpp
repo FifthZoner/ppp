@@ -14,9 +14,9 @@ namespace ppp::internal {
         I _value{};
 
         explicit _type_character(const std::size_t size) {
-            if (size > 0)
+            if (int32_t(size) > 0)
                 _value.reserve(size);
-            else if constexpr (is_fixed_length or has_max_length)
+            else if constexpr (is_fixed_length)
                 throw std::runtime_error("Length limited character type had non-positive size passed!");
         }
         ~_type_character() override = default;
@@ -30,7 +30,14 @@ namespace ppp::internal {
         }
 
         template <typename T>
-        constexpr static bool is_allowed_cpp_type = std::is_convertible_v<I, T>;
+        constexpr static bool is_allowed_cpp_type = std::is_convertible_v<I, T> or std::is_same_v<I, T>;
+
+        template <typename T>
+        constexpr static void throw_if_wrong_type() {
+            if (not is_allowed_cpp_type<T>)
+                throw std::runtime_error("Incompatible type passed to character value!");
+        }
+
 
         template <typename T>
         _type_character& operator=(T&& value) {

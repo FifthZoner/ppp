@@ -76,7 +76,7 @@ namespace ppp::internal {
         message_type type = unknown;
         uint32_t _helper = 0;
 
-        inline void _add(const void* src_ptr, std::size_t count) {
+        void _add(const void* src_ptr, std::size_t count) {
             auto start = data.size();
             // <data> + <string> + \0
             data.resize(data.size() + count);
@@ -120,6 +120,7 @@ namespace ppp::internal {
         [[nodiscard]] std::string authentication_sasl_final_get_additional_data() const;
         [[nodiscard]] std::vector<field_def> row_description_get_field_defs() const;
         [[nodiscard]] uint16_t data_row_get_row_number() const;
+        [[nodiscard]] std::vector<std::string> data_row_get_values() const;
 
     };
 

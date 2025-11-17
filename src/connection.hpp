@@ -21,7 +21,7 @@ namespace ppp {
         std::unique_ptr<asio::ip::tcp::socket> socket = nullptr;
         bool is_authed = false;
 
-        std::unordered_map<std::string, type_definition> db_types {};
+        std::unordered_map<uint32_t, type_definition> db_types {};
 
 
     public:

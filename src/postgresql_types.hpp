@@ -6,6 +6,7 @@
 
 #include <concepts>
 #include <type_traits>
+#include <unordered_map>
 
 #include "type_manipulation/postgresql_type_base.tpp"
 #include "type_manipulation/postgresql_numeric_types.tpp"
@@ -79,7 +80,16 @@ namespace ppp::internal {
                           and is_registered_postgresql_type<T>;
 
     template<typename T, typename... Rs>
-    concept usable_cpp_type = (Rs::template is_allowed_cpp_type<T> or ...);
+    concept _usable_cpp_type = (Rs::template is_allowed_cpp_type<T> or ...);
+
+    template <typename T>
+    constexpr bool _usable_cpp_type_bool = _usable_cpp_type<T, PPP_REGISTERED_POSTGRESQL_TYPES>;
+
+    template<typename T, typename... Rs>
+        concept usable_cpp_type = requires {
+        _usable_cpp_type_bool<T>;
+    };
+
 
     // just to make sure the conditions work correctly
     template <postgresql_type T>
@@ -87,7 +97,20 @@ namespace ppp::internal {
 
     using test2 = test<postgresql_type_real>;
 
+    inline std::unordered_map<std::string, type_enum> _type_name_map = {
+        {"int2", enum_postgresql_type_integer_2},
+        {"int4", enum_postgresql_type_integer_4},
+        {"int8", enum_postgresql_type_integer_8},
+        {"char", enum_postgresql_type_char},
+        {"varchar", enum_postgresql_type_varchar_n},
+        {"bpchar", enum_postgresql_type_bpchar_n}
+    };
 
+    inline type_enum get_type_enum_by_name(std::string name) {
+        if (_type_name_map.contains(name))
+            return _type_name_map[name];
+        return none;
+    }
 
 
 }

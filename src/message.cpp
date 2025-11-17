@@ -525,4 +525,28 @@ namespace ppp::internal {
     uint16_t message::data_row_get_row_number() const {
         return reverse<uint16_t>(data.data() + 5);
     }
+
+    std::vector<std::string> message::data_row_get_values() const {
+        auto amount = data_row_get_row_number();
+        std::vector<std::string> values{};
+        values.reserve(amount);
+
+        auto ptr = data.data() + 7;
+        const auto* overflow_ptr = data.data() + data.size();
+        for (uint16_t counter = 0; counter < amount; counter++) {
+            auto value_size = reverse<uint32_t>(ptr);
+            if (value_size <= 0)
+                throw std::runtime_error("Parsed data row value size as less than 0!");
+            ptr += 4;
+            values.emplace_back(string_from_bytes(ptr, value_size));
+            ptr += value_size;
+
+            if (ptr > overflow_ptr) {
+                std::cout << "ERROR: Message parsing led to buffer overflow!\n";
+                return {};
+            }
+        }
+
+        return values;
+    }
 }

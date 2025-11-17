@@ -7,6 +7,7 @@
 #include <iostream>
 #include <ostream>
 
+#include "message.hpp"
 #include "postgresql_types.hpp"
 
 namespace ppp {
@@ -14,21 +15,6 @@ namespace ppp {
 }
 
 namespace ppp::internal {
-
-    struct internal_row_value;
-
-    struct internal_row {
-
-
-        explicit internal_row(const table& table);
-        internal_row(const table& table, message&& message);
-        internal_row(const internal_row& other);
-        internal_row(internal_row&& other) noexcept;
-
-        internal_row_value operator[](const table& table, const std::string& name);
-        internal_row_value operator[](const table& table, std::size_t index);
-
-    };
 
     struct typeless_value {
         void* _value = nullptr;
@@ -45,7 +31,8 @@ namespace ppp::internal {
         template <postgresql_type T, usable_cpp_type V>
         void set_value(V&& value) {
             T::template throw_if_wrong_type<V>();
-            static_cast<T*>(_value)->operator=(std::forward<T>(value));
+            if constexpr (T::template is_allowed_cpp_type<V>)
+                static_cast<T*>(_value)->operator=(std::forward<T>(value));
         }
 
         template <postgresql_type T>
@@ -59,15 +46,23 @@ namespace ppp::internal {
         }
 
         template <postgresql_type T, usable_cpp_type V>
-        constexpr V as(T*) {
+        constexpr V as(V*) {
             T::template throw_if_wrong_type<V>();
-            return static_cast<T*>(_value)->template as<V>();
+            if constexpr (T::template is_allowed_cpp_type<V>)
+                return static_cast<T*>(_value)->template as<V>();
+            return {};
         }
 
         template <postgresql_type T, usable_cpp_type V>
         constexpr void set(V&& value) {
             T::template throw_if_wrong_type<V>();
-            static_cast<T*>(_value)->template operator=<V>(value);
+            if constexpr (T::template is_allowed_cpp_type<V>)
+                static_cast<T*>(_value)->template operator=<V>(value);
+        }
+
+        template <postgresql_type T>
+        constexpr void copy_value(const typeless_value& other) {
+            _value = new T(*static_cast<T*>(other._value));
         }
 
     public:
@@ -78,6 +73,10 @@ namespace ppp::internal {
         typeless_value(typeless_value&& other)  noexcept : _type(other._type) {
             _value = other._value;
             other._value = nullptr;
+        }
+
+        typeless_value(const typeless_value& other) : _type(other._type) {
+            SWITCH_PSQL_TYPE_EXCEPTION(_type, copy_value<, >(other));
         }
 
         ~typeless_value() {
@@ -102,7 +101,12 @@ namespace ppp::internal {
 
         template <usable_cpp_type V>
         typeless_value& operator=(V&& value) {
-            SWITCH_PSQL_TYPE_EXCEPTION(_type, set<, >(std::forward<V>(value)));
+            if constexpr (std::same_as<V, std::string> or std::same_as<V, std::string&> or std::same_as<V, std::string&&>) {
+                std::istringstream s{value};
+                SWITCH_PSQL_TYPE_EXCEPTION(_type, as_type<, >().operator>>(s));
+            }
+            else
+                SWITCH_PSQL_TYPE_EXCEPTION(_type, set<, >(std::forward<V>(value)));
             return *this;
         }
 
@@ -115,15 +119,21 @@ namespace ppp::internal {
         }
     };
 
-    struct internal_row_value {
-        const table& _table;
-        internal_row& _row;
-        const std::size_t _column_index;
+    struct internal_row {
+        std::vector<typeless_value> _data{};
 
-        internal_row_value(const table& table, internal_row& row, std::size_t column_index);
-        internal_row_value(internal_row_value&& other) noexcept = default;
-        internal_row_value(const internal_row_value& other) = default;
+        void set_data_from_table(const table& table);
+
+        explicit internal_row(const table& table);
+        internal_row(const table& table, message&& message);
+        internal_row(const internal_row& other);
+        internal_row(internal_row&& other) noexcept;
+
+        typeless_value operator[](const table& table, const std::string& name);
+        typeless_value operator[](const table& table, std::size_t index);
     };
+
+    std::ostream& operator<< (std::ostream& os, internal_row& row);
 }
 
 #endif //PPP_INTERNAL_ROW_HPP

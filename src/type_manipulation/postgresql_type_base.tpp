@@ -40,11 +40,11 @@ PPP_REGISTERED_POSTGRESQL_CHARACTER_TYPES
 
         // cannot be instantiated
         postgresql_type_base() {
-            throw_if_wrong_type<postgresql_type_base>();
+            //throw_if_wrong_type<postgresql_type_base>();
         }
 
         virtual ~postgresql_type_base() {
-            throw_if_wrong_type<postgresql_type_base>();
+            //throw_if_wrong_type<postgresql_type_base>();
         }
 
         // for output and input in queries

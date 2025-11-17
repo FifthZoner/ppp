@@ -13,6 +13,8 @@
 namespace ppp {
     /// Represents a table gotten from database as query response
     class table {
+        // TODO: remove later
+    public:
         std::vector<internal::field_def> fields{};
         std::vector<internal::internal_row> rows{};
 

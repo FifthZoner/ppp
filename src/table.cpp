@@ -42,17 +42,14 @@ namespace ppp {
                 throw std::runtime_error("Invalid row column amount");
         }
 
+        rows.reserve(counter);
         for (auto row : row_messages) {
             if (row.type != internal::data_row)
                 continue;
-
-            for (auto& field : fields) {
-
-            }
+            std::cout << "  PARSING: parsing data row\n";
+            rows.emplace_back(*this, std::move(row));
+            internal::internal_row& parsed = rows[rows.size() - 1];
+            std::cout << "    INFO: Parsed row: " << parsed << "\n";
         }
-
-        rows.reserve(counter);
-
-
     }
 } // ppp
