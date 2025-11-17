@@ -12,7 +12,18 @@ add_library(ppp STATIC
         src/message.hpp
         src/utils.tpp
         src/field_def.cpp
-        src/field_def.hpp)
+        src/field_def.hpp
+        src/table.cpp
+        src/table.hpp
+        src/internal_row.cpp
+        src/internal_row.hpp
+        src/row.cpp
+        src/row.hpp
+        src/type_manipulation/postgresql_type_base.tpp
+        src/postgresql_types.hpp
+        src/type_manipulation/postgresql_numeric_types.tpp
+        src/macro_loop.hpp
+        src/type_manipulation/postgresql_character_types.tpp)
 
 set_target_properties(ppp PROPERTIES LINKER_LANGUAGE CXX)
 target_link_libraries(ppp gsasl)

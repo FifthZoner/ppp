@@ -9,6 +9,8 @@
 
 #include <gsasl.h>
 
+#include "table.hpp"
+
 using namespace std::chrono_literals;
 using namespace ppp::internal;
 using namespace asio::ip;
@@ -18,7 +20,7 @@ namespace ppp {
         std::vector<uint8_t> result{};
 
         try {
-            std::array<uint8_t, 256> buffer{};
+            std::array<uint8_t, 8192> buffer{};
             std::size_t len = 0;
             do {
                 len = socket.read_some(asio::buffer(buffer));
@@ -151,6 +153,45 @@ namespace ppp {
         gsasl_done(ctx);
 
         is_authed = true;
+
+        std::cout << "CONNECTION: Querying type OIDs...";
+
+        msg = message::create_query_message("SELECT oid, typname FROM pg_type where typrelid = 0 and typcategory != 'A';");
+        std::cout << "CONNECTION: Sent: " << socket->send(asio::buffer(msg.data)) << " bytes of message\n";
+
+        responses = message::create_from_data(receive_message(*socket));
+
+        for (auto& n : responses) {
+            if (n.type == row_description) {
+                auto fields = n.row_description_get_field_defs();
+                for (auto& f : fields) {
+                    if (std::string(f.name.get()) == "oid") {
+                        type_definition current{};
+
+                        current._name = "oid";
+                        current._oid = f.data_type_oid;
+                        f.field_type = current._type = enum_postgresql_type_integer_4;
+
+
+                        this->db_types.emplace(current._name, current);
+                    }
+                    else if (std::string(f.name.get()) == "typname") {
+                        type_definition current{};
+
+                        current._name = "name";
+                        current._oid = f.data_type_oid;
+                        f.field_type = current._type = enum_postgresql_type_varchar_n;
+
+                        this->db_types.emplace(current._name, current);
+                    }
+                }
+                auto type_table = table(std::move(fields), std::move(responses));
+
+
+                break;
+            }
+        }
+
     }
 
     void connection::query(std::string&& query) {

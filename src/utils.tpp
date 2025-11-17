@@ -32,6 +32,11 @@ namespace ppp::internal {
             ((uint8_t*)&result)[n] = ((uint8_t*)value)[sizeof(T) - 1 - n];
         return result;
     }
+
+    //template <is_postgresql_type T>
+    //bool is_type_compatible(field_def field) {
+    //    if (field.)
+    //}
 }
 
 #endif //PPP_UTILS_TPP

@@ -7,11 +7,21 @@
 
 #include <asio.hpp>
 
+#include "postgresql_types.hpp"
+
 namespace ppp {
+    struct type_definition {
+        std::string _name{};
+        uint32_t _oid = 0;
+        internal::type_enum _type = internal::none;
+    };
+
     class connection {
         asio::io_service io_service{};
         std::unique_ptr<asio::ip::tcp::socket> socket = nullptr;
         bool is_authed = false;
+
+        std::unordered_map<std::string, type_definition> db_types {};
 
 
     public:

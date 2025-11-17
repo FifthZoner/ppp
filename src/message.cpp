@@ -470,6 +470,7 @@ namespace ppp::internal {
         std::cout << "    INFO: Amount of fields: " << field_amount << "\n";
 
         std::vector<field_def> fields{};
+        fields.reserve(field_amount);
         for (uint16_t n = 0; n < field_amount; n++) {
             std::cout << "  PARSING: processing field definition: " << n + 1 << "/" << field_amount << "\n";
             field_def field{};
@@ -509,6 +510,8 @@ namespace ppp::internal {
             field.format_code = reverse<uint16_t>(ptr);
             ptr += sizeof(field.format_code);
             std::cout << "    INFO: field format code: " << field.format_code << "\n";
+
+            fields.push_back(std::move(field));
         }
 
         if (ptr > overflow_ptr) {
@@ -517,5 +520,9 @@ namespace ppp::internal {
         }
 
         return std::move(fields);
+    }
+
+    uint16_t message::data_row_get_row_number() const {
+        return reverse<uint16_t>(data.data() + 5);
     }
 }

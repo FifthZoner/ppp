@@ -119,6 +119,7 @@ namespace ppp::internal {
         [[nodiscard]] std::string authentication_sasl_continue_get_challenge() const;
         [[nodiscard]] std::string authentication_sasl_final_get_additional_data() const;
         [[nodiscard]] std::vector<field_def> row_description_get_field_defs() const;
+        [[nodiscard]] uint16_t data_row_get_row_number() const;
 
     };
 
