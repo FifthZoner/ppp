@@ -304,7 +304,7 @@ namespace ppp::internal {
 
         const uint8_t* ptr = buffer.data() + 1 + offset;
         if (buffer.size() - offset < 6) {
-            std::cout << "ERROR: Invalid message length: " << buffer.size() << "\n";
+            std::cout << "CONNECTION: Invalid message length: " << buffer.size() << " possibly a split message...\n";
             return msg;
         }
 
@@ -355,49 +355,95 @@ namespace ppp::internal {
         return msg;
     }
 
-    std::vector<message> message::create_from_data(std::vector<uint8_t>&& buffer) {
+    using namespace asio::ip;
+
+    std::vector<uint8_t> receive_message(tcp::socket& socket) {
+        std::vector<uint8_t> result{};
+
+        try {
+            std::array<uint8_t, 8192> buffer{};
+            std::size_t len = 0;
+            do {
+                len = socket.read_some(asio::buffer(buffer));
+                auto old_size = result.size();
+                result.resize(result.size() + len);
+                for (std::size_t n = 0; n < len; ++n)
+                    result[old_size + n] = buffer[n];
+            }
+            while (len == buffer.size());
+
+            std::cout << "PACKET: Received " << result.size() << " bytes";
+        }
+        catch (const std::system_error& e) {
+            std::cout << "ERROR: Error while receiving the response: " << e.what() << "\n";
+        }
+        return result;
+    }
+
+    std::vector<message> message::create_from_data(tcp::socket& socket) {
         std::vector<message> messages{};
 
-        if (buffer.empty())
-            return messages;
+        socket.wait(tcp::socket::wait_read);
 
-        uint32_t offset = 0;
-        while (offset < buffer.size()) {
-            message msg{};
-
-            switch (buffer[offset]) {
-            case 'R':
-                msg = parse_authentication_message(buffer, offset);
-                break;
-            case 'S':
-                msg = parse_parameter_status_message(buffer, offset);
-                break;
-            case 'K':
-                msg = parse_backend_key_data_message(buffer, offset);
-                break;
-            case 'Z':
-                msg = parse_ready_for_query_message(buffer, offset);
-                break;
-            case 'T':
-                msg = parse_row_description_message(buffer, offset);
-                break;
-            case 'D':
-                msg = parse_data_row_message(buffer, offset);
-                break;
-            case 'C':
-                msg = parse_close_message(buffer, offset);
-                break;
-            default:
-                break;
-            }
-
-            if (msg.type != unknown)
-                messages.emplace_back(std::move(msg));
+        bool waiting_for_next = false;
+        std::vector<uint8_t> buffer{};
+        while (socket.available() > 0 or waiting_for_next) {
+            if (buffer.empty())
+                buffer = receive_message(socket);
             else {
-                std::cout << "ERROR: Unknown message type! Aborting parsing of further messages in the packet!\n";
-                return messages;
+                buffer.append_range( receive_message(socket));
+                waiting_for_next = false;
             }
+
+            if (buffer.empty())
+                return messages;
+
+            uint32_t offset = 0;
+            while (offset < buffer.size()) {
+                message msg{};
+
+                switch (buffer[offset]) {
+                case 'R':
+                    msg = parse_authentication_message(buffer, offset);
+                    break;
+                case 'S':
+                    msg = parse_parameter_status_message(buffer, offset);
+                    break;
+                case 'K':
+                    msg = parse_backend_key_data_message(buffer, offset);
+                    break;
+                case 'Z':
+                    msg = parse_ready_for_query_message(buffer, offset);
+                    break;
+                case 'T':
+                    msg = parse_row_description_message(buffer, offset);
+                    break;
+                case 'D':
+                    msg = parse_data_row_message(buffer, offset);
+                    break;
+                case 'C':
+                    msg = parse_close_message(buffer, offset);
+                    break;
+                default:
+                    break;
+                }
+
+                if (msg.type != unknown)
+                    messages.emplace_back(std::move(msg));
+                else if (not waiting_for_next) {
+                    // let's assume this is where a message ends
+                    std::cout << "CONNECTION: possible next message...\n";
+                    waiting_for_next = true;
+                    break;
+                }
+                else {
+                    std::cout << "ERROR: Invalid message found! Aborting further parsing of messages!\n";
+                    return messages;
+                }
+            }
+            offset = 0;
         }
+
         return messages;
     }
 
@@ -534,9 +580,12 @@ namespace ppp::internal {
         auto ptr = data.data() + 7;
         const auto* overflow_ptr = data.data() + data.size();
         for (uint16_t counter = 0; counter < amount; counter++) {
-            auto value_size = reverse<uint32_t>(ptr);
-            if (value_size <= 0)
-                throw std::runtime_error("Parsed data row value size as less than 0!");
+            auto value_size = reverse<  int32_t>(ptr);
+            if (value_size == -1)
+                    value_size = 0;
+            else if (value_size < -1)
+                throw std::runtime_error("Parsed data row value size as less than -1!");
+
             ptr += 4;
             values.emplace_back(string_from_bytes(ptr, value_size));
             ptr += value_size;

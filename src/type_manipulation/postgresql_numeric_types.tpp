@@ -28,7 +28,8 @@ namespace ppp::internal {
         }
 
         template <typename T>
-        constexpr static bool is_allowed_cpp_type = std::is_convertible_v<I, T>;
+        constexpr static bool is_allowed_cpp_type = std::is_convertible_v<I, T>
+                                                 or std::is_same_v<T, std::string>;
 
         template <typename T>
                 constexpr static void throw_if_wrong_type() {
@@ -38,13 +39,25 @@ namespace ppp::internal {
 
         template <typename T>
         _type_integer& operator=(T&& value) {
-            _value = I(value);
+            if constexpr(not std::is_same_v<T, std::string>)
+                _value = I(std::move(value));
+            else {
+                if (value.contains('.') or value.contains(','))
+                    _value = I(std::stold(value));
+                else if (value.contains('-'))
+                    _value = I(std::stoll(value));
+                else
+                    _value = I(std::stoull(value));
+            }
             return *this;
         }
 
         template <typename T>
         T as() {
-            return T(_value);
+            if constexpr (std::same_as<T, std::string>)
+                return std::to_string(_value);
+            else
+                return T(_value);
         }
     };
 

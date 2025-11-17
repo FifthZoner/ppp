@@ -57,7 +57,7 @@ namespace ppp::internal {
         constexpr void set(V&& value) {
             T::template throw_if_wrong_type<V>();
             if constexpr (T::template is_allowed_cpp_type<V>)
-                static_cast<T*>(_value)->template operator=<V>(value);
+                static_cast<T*>(_value)->template operator=<V>(std::move(value));
         }
 
         template <postgresql_type T>
@@ -100,13 +100,13 @@ namespace ppp::internal {
         }
 
         template <usable_cpp_type V>
-        typeless_value& operator=(V&& value) {
+        typeless_value& operator=(V value) {
             if constexpr (std::same_as<V, std::string> or std::same_as<V, std::string&> or std::same_as<V, std::string&&>) {
                 std::istringstream s{value};
                 SWITCH_PSQL_TYPE_EXCEPTION(_type, as_type<, >().operator>>(s));
             }
             else
-                SWITCH_PSQL_TYPE_EXCEPTION(_type, set<, >(std::forward<V>(value)));
+                SWITCH_PSQL_TYPE_EXCEPTION(_type, set<, >(V(value)));
             return *this;
         }
 

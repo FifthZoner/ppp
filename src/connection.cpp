@@ -16,29 +16,6 @@ using namespace ppp::internal;
 using namespace asio::ip;
 
 namespace ppp {
-    std::vector<uint8_t> receive_message(tcp::socket& socket) {
-        std::vector<uint8_t> result{};
-
-        try {
-            std::array<uint8_t, 8192> buffer{};
-            std::size_t len = 0;
-            do {
-                len = socket.read_some(asio::buffer(buffer));
-                auto old_size = result.size();
-                result.resize(result.size() + len);
-                for (std::size_t n = 0; n < len; ++n)
-                    result[old_size + n] = buffer[n];
-            }
-            while (len == buffer.size());
-
-            std::cout << "PACKET: Received " << result.size() << " bytes";
-        }
-        catch (const std::system_error& e) {
-            std::cout << "ERROR: Error while receiving the response: " << e.what() << "\n";
-        }
-        return result;
-    }
-
     connection::connection(address&& ip_address, uint16_t port, std::string&& user, std::string&& password, std::string&& database) {
 
         socket = std::make_unique<tcp::socket>(io_service);
@@ -54,7 +31,7 @@ namespace ppp {
 
         std::cout << "CONNECTION: Sent: " << socket->send(asio::buffer(msg.data)) << " bytes of message\n";
 
-        auto res = message::create_from_data(receive_message(*socket))[0];
+        auto res = message::create_from_data(*socket)[0];
 
         if (res.type != authentication_sasl) {
             std::cout << "ERROR: Expected sasl auth!";
@@ -108,7 +85,7 @@ namespace ppp {
         msg = message::create_sasl_initial_response("SCRAM-SHA-256", std::move(encoded));
         std::cout << "CONNECTION: Sent: " << socket->send(asio::buffer(msg.data)) << " bytes of message\n";
 
-        res = message::create_from_data(receive_message(*socket))[0];
+        res = message::create_from_data(*socket)[0];
 
         if (res.type != authentication_sasl_continue) {
             std::cout << "ERROR: Expected sasl auth continuation!";
@@ -135,7 +112,7 @@ namespace ppp {
         msg = message::create_sasl_response(std::move(encoded));
         std::cout << "CONNECTION: Sent: " << socket->send(asio::buffer(msg.data)) << " bytes of message\n";
 
-        auto responses = message::create_from_data(receive_message(*socket));
+        auto responses = message::create_from_data(*socket);
 
         if (responses.empty() or responses[0].type != authentication_sasl_final) {
             std::cout << "ERROR: Expected sasl auth final message!";
@@ -156,7 +133,7 @@ namespace ppp {
         msg = message::create_query_message("SELECT oid, typname FROM pg_type where typrelid = 0 and typcategory != 'A';");
         std::cout << "CONNECTION: Sent: " << socket->send(asio::buffer(msg.data)) << " bytes of message\n";
 
-        responses = message::create_from_data(receive_message(*socket));
+        responses = message::create_from_data(*socket);
 
         for (auto& n : responses) {
             if (n.type == row_description) {
@@ -205,22 +182,19 @@ namespace ppp {
 
     }
 
-    void connection::query(std::string&& query) {
+    table connection::query(std::string&& query) {
         auto msg = message::create_query_message(std::move(query));
         std::cout << "CONNECTION: Sent: " << socket->send(asio::buffer(msg.data)) << " bytes of message\n";
 
-        auto responses = message::create_from_data(receive_message(*socket));
+        auto responses = message::create_from_data(*socket);
         for (auto& n : responses)
             if (n.type == row_description) {
                 auto x = n.row_description_get_field_defs();
                 for (auto& y : x)
                     y.field_type = db_types[y.data_type_oid]._type;
-                auto tab = table(std::move(x), std::move(responses));
-                break;
+                return table(std::move(x), std::move(responses));
             }
-
-
-
+        throw std::runtime_error("Could not parse a table!\n");
     }
 
     connection::connection(connection&& other) noexcept {

@@ -8,6 +8,7 @@
 #include <asio.hpp>
 
 #include "postgresql_types.hpp"
+#include "table.hpp"
 
 namespace ppp {
     struct type_definition {
@@ -25,7 +26,7 @@ namespace ppp {
 
 
     public:
-        void query(std::string&& query);
+        table query(std::string&& query);
 
         connection(asio::ip::address&& ip_address, uint16_t port, std::string&& user, std::string&& password, std::string&& database);
         connection(connection&& other) noexcept ;

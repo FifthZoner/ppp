@@ -110,7 +110,7 @@ namespace ppp::internal {
         static message create_query_message(std::string&& text);
         static message create_terminate_message();
 
-        static std::vector<message> create_from_data(std::vector<uint8_t>&& buffer);
+        static std::vector<message> create_from_data(asio::ip::tcp::socket& socket);
 
         void finalize();
 
