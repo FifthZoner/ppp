@@ -7,17 +7,10 @@
 #include <iostream>
 
 namespace ppp {
-    std::size_t table::operator[](const std::string& name) const {
-        for (std::size_t n = 0; n < fields.size(); ++n)
-            if (strcmp(fields[n].name.get(), name.c_str()) == 0)
-                return n;
-        throw std::runtime_error("Invalid column name");
-    }
-
-    internal::field_def table::operator[](std::size_t index) const {
-        if (index >= fields.size())
-            throw std::runtime_error("Invalid column index");
-        return fields[index];
+    row_ref table::operator[](std::size_t index) {
+        if (index >= rows.size())
+            throw std::runtime_error("Row index exceeds table capacity");
+        return {*this, rows[index]};
     }
 
     table::table(std::vector<internal::field_def>&& fields) {
@@ -51,5 +44,14 @@ namespace ppp {
             internal::internal_row& parsed = rows[rows.size() - 1];
             std::cout << "    INFO: Parsed row: " << parsed << "\n";
         }
+    }
+
+    std::ostream& operator<< (std::ostream& os, table& table) {
+        for (auto& n : table.rows) {
+            if (&n != table.rows.data())
+                os << ",\n";
+            os << n;
+        }
+        return os << "\n";
     }
 } // ppp
