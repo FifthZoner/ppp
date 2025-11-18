@@ -40,7 +40,7 @@ namespace ppp::internal {
         template <typename T>
         _type_integer& operator=(T&& value) {
             if constexpr(not std::is_same_v<T, std::string>)
-                _value = I(std::move(value));
+                _value = I(std::forward<T>(value));
             else {
                 if (value.contains('.') or value.contains(','))
                     _value = I(std::stold(value));

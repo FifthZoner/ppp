@@ -57,7 +57,7 @@ namespace ppp::internal {
         constexpr void set(V&& value) {
             T::template throw_if_wrong_type<V>();
             if constexpr (T::template is_allowed_cpp_type<V>)
-                static_cast<T*>(_value)->template operator=<V>(std::move(value));
+                static_cast<T*>(_value)->template operator=<V>(std::forward<V>(value));
         }
 
         template <postgresql_type T>
@@ -91,33 +91,36 @@ namespace ppp::internal {
 
         template <usable_cpp_type V>
         V operator()() {
-            SWITCH_PSQL_TYPE_EXCEPTION(_type, return as<, >(static_cast<V*>(nullptr)));
+            SWITCH_PSQL_TYPE_EXCEPTION(_type, return as<, >(static_cast<std::remove_reference_t<V>*>(nullptr)));
         }
 
         template <usable_cpp_type V>
         V& operator()(V& place_to_set) {
-            SWITCH_PSQL_TYPE_EXCEPTION(_type, return place_to_set = as<, >(static_cast<V*>(nullptr)));
+            SWITCH_PSQL_TYPE_EXCEPTION(_type, return place_to_set = as<, >(static_cast<std::remove_reference_t<V>*>(nullptr)));
         }
 
         template <usable_cpp_type V>
         typeless_value& operator=(V value) {
-            if constexpr (std::same_as<V, std::string> or std::same_as<V, std::string&> or std::same_as<V, std::string&&>) {
+            if constexpr (std::same_as<std::remove_reference_t<V>, std::string> or std::same_as<std::remove_reference_t<V>, const char*>) {
                 std::istringstream s{value};
                 SWITCH_PSQL_TYPE_EXCEPTION(_type, as_type<, >().operator>>(s));
             }
             else
-                SWITCH_PSQL_TYPE_EXCEPTION(_type, set<, >(V(value)));
+                SWITCH_PSQL_TYPE_EXCEPTION(_type, set<, >(std::remove_reference_t<V>(value)));
             return *this;
         }
 
-        std::ostream& operator << (std::ostream& os) {
-            SWITCH_PSQL_TYPE_EXCEPTION(_type, return as_type<, >().operator<<(os));
-        }
-
-        std::istream& operator >> (std::istream& is) {
-            SWITCH_PSQL_TYPE_EXCEPTION(_type, return as_type<, >().operator>>(is));
-        }
+        friend std::ostream& operator << (std::ostream& os, typeless_value& value);
+        friend std::istream& operator >> (std::istream& is, typeless_value& value);
     };
+
+    inline std::ostream& operator << (std::ostream& os, typeless_value& value) {
+        SWITCH_PSQL_TYPE_EXCEPTION(value._type, return value.as_type<, >().operator<<(os));
+    }
+
+    inline std::istream& operator >> (std::istream& is, typeless_value& value) {
+        SWITCH_PSQL_TYPE_EXCEPTION(value._type, return value.as_type<, >().operator>>(is));
+    }
 
     struct internal_row {
         std::vector<typeless_value> _data{};
@@ -129,8 +132,8 @@ namespace ppp::internal {
         internal_row(const internal_row& other);
         internal_row(internal_row&& other) noexcept;
 
-        typeless_value operator[](const table& table, const std::string& name);
-        typeless_value operator[](const table& table, std::size_t index);
+        typeless_value& operator[](const table& table, const std::string& name);
+        typeless_value& operator[](const table& table, std::size_t index);
     };
 
     std::ostream& operator<< (std::ostream& os, internal_row& row);

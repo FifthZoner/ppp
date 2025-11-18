@@ -40,14 +40,14 @@ namespace ppp::internal {
         _data = std::move(other._data);
     }
 
-    typeless_value internal_row::operator[](const table& table, const std::string& name) {
+    typeless_value& internal_row::operator[](const table& table, const std::string& name) {
         for (auto n = 0; n < table.fields.size(); n++)
             if (not strcmp(table.fields[n].name.get(), name.c_str()))
                 return _data[n];
         throw std::runtime_error("Provided name does not name a column in table!");
     }
 
-    typeless_value internal_row::operator[](const table& table, std::size_t index) {
+    typeless_value& internal_row::operator[](const table& table, std::size_t index) {
         if (index < table.fields.size())
             return _data[index];
         throw std::runtime_error("Provided column index exceeds table's column count!");
@@ -57,7 +57,7 @@ namespace ppp::internal {
      std::ostream& operator<<(std::ostream& os, internal_row& row) {
         os << "(";
         for (auto n = 0; n < row._data.size(); n++) {
-            row._data[n].operator<<(os);
+            os << row._data[n];
             if (n != row._data.size() - 1)
                 os << ", ";
         }
